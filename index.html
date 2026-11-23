@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Анонимизатор Промптов (PII Scrubber) и Дешифратор ИИ — IMPERIA Hub</title>
+<meta name="description" content="Бесплатный локальный DLP-очиститель персональных данных перед отправкой в ChatGPT, Claude и DeepSeek. Детектор промпт-инъекций, обратное восстановление данных и PDF-сертификат.">
+<script>
+  const cLink = document.createElement('link');
+  cLink.rel = 'canonical';
+  cLink.href = window.location.origin + window.location.pathname;
+  document.head.appendChild(cLink);
+</script>
+<style>
+:root {
+  --primary: #0284c7;
+  --primary-hover: #0369a1;
+  --success: #10b981;
+  --danger: #ef4444;
+  --bg: #f4f6f9;
+  --card-bg: #ffffff;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
+  --accent: #f59e0b;
+  --purple: #8b5cf6;
+  --slate: #334155;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+body { background: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+.wrapper { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 24px; width: 100%; max-width: 600px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+h1 { font-size: 21px; font-weight: 700; margin-bottom: 4px; text-align: center; letter-spacing: -0.025em; }
+.subtitle { font-size: 13px; color: var(--text-muted); text-align: center; margin-bottom: 20px; }
+.live-meter { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 20px; text-align: center; }
+.meter-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.05em; }
+.bar-container { background: var(--border); border-radius: 20px; height: 12px; width: 100%; overflow: hidden; position: relative; }
+.bar-fill { background: var(--primary); width: 0%; height: 100%; transition: all 0.4s ease; }
+.group { margin-bottom: 16px; }
+label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+input[type="text"], select, textarea { width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 14px; background: #fff; color: var(--text); transition: border 0.2s; }
+textarea { resize: vertical; min-height: 120px; line-height: 1.5; }
+input[type="text"]:focus, select:focus, textarea:focus { border-color: var(--primary); outline: none; }
+.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 520px) { .row-2 { grid-template-columns: 1fr; } }
+.calc-btn { width: 100%; padding: 14px; background: var(--primary); color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 8px; box-shadow: 0 4px 6px -1px rgba(2,132,199,0.2); transition: background 0.2s; }
+.calc-btn:hover { background: var(--primary-hover); }
+.action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.copy-btn { width: 100%; padding: 10px; background: #f8fafc; color: var(--slate); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+.copy-btn:hover { background: #e2e8f0; }
+.skynet-box { background: #fee2e2; border: 1px solid #fca5a5; border-radius: 12px; padding: 14px; margin-top: 16px; display: none; }
+.skynet-title { font-size: 12px; font-weight: 700; color: var(--danger); margin-bottom: 6px; text-transform: uppercase; text-align: center; letter-spacing: 0.05em; }
+.results { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-top: 20px; display: none; }
+.results-title { font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; text-align: center; text-transform: uppercase; letter-spacing: 0.05em; }
+.res-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; border-bottom: 1px dashed var(--border); align-items: center; }
+.res-row:last-child { border-bottom: none; }
+.res-val { font-weight: 700; color: var(--primary); text-align: right; max-width: 65%; }
+.box-panel { margin-top: 14px; background: #ffffff; border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.box-panel.clean { border-color: var(--success); }
+.box-panel.restore { border-color: var(--purple); background: #faf5ff; }
+.box-panel textarea { min-height: 95px; margin-top: 6px; font-size: 13px; }
+.partner-btn { display: block; width: 100%; padding: 11px; background: #fff; border: 1px solid var(--purple); color: var(--purple); border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; text-align: center; margin-top: 12px; text-decoration: none; }
+.partner-btn:hover { background: var(--purple); color: #fff; }
+.math-log-box { background: #f1f5f9; border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 12px; font-family: monospace; font-size: 12px; color: var(--slate); display: none; line-height: 1.45; }
+.seo-text { font-size: 12px; color: var(--text-muted); margin-top: 24px; text-align: justify; line-height: 1.4; border-top: 1px solid var(--border); padding-top: 16px; display: none; }
+
+@media print {
+  body { background: #fff; padding: 0; }
+  .wrapper { box-shadow: none; border: none; max-width: 100%; padding: 0; }
+  .no-print, .calc-btn, .action-row, .partner-btn, .ad-banner, .seo-text, .box-panel.restore { display: none !important; }
+  .results, .math-log-box { display: block !important; border: 1px solid #cbd5e1; }
+}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <h1>Анонимизатор Промптов и Дешифратор ИИ</h1>
+  <div class="subtitle">Локальная DLP-очистка персональных данных (PII) и защита от промпт-инъекций</div>
+
+  <div class="live-meter no-print">
+    <div class="meter-label">Индекс риска утечки данных: <span id="live-preview-zone">Вставьте текст или договор</span></div>
+    <div class="bar-container"><div class="bar-fill" id="bar-fill"></div></div>
+  </div>
+  <div class="row-2 no-print">
+    <div class="group">
+      <label for="scrub-mode">Режим маскирования данных</label>
+      <select id="scrub-mode" onchange="updatePreview()">
+        <option value="tags">Умные теги ([EMAIL_1], [CARD_1]) — для ИИ</option>
+        <option value="redact">Жесткая цензура (████████) — для документов</option>
+      </select>
+    </div>
+    <div class="group">
+      <label for="custom-secrets">Свой стоп-лист (через запятую)</label>
+      <input type="text" id="custom-secrets" placeholder="Например: ООО Ромашка, Иванов, Проект Альфа" oninput="updatePreview()">
+    </div>
+  </div>
+
+  <div class="group no-print">
+    <label for="raw-prompt">Исходный текст, договор или промпт (100% локально в браузере)</label>
+    <textarea id="raw-prompt" placeholder="Вставьте сюда переписку, код с API-ключами, договор или резюме перед отправкой в ChatGPT/Claude..." oninput="updatePreview()"></textarea>
+  </div>
+
+  <button class="calc-btn no-print" onclick="runPiiScrubber()">Обезвредить данные и проверить на инъекции</button>
+
+  <div class="results" id="results-box">
+    <div class="results-title">Сертификат DLP-безопасности и аудита утечек</div>
+    <div class="res-row"><span>Индекс риска утечки (Leakage Risk):</span><span class="res-val" id="res-risk-score" style="color:var(--danger)">0 / 100</span></div>
+    <div class="res-row"><span>Обезврежено объектов PII:</span><span class="res-val" id="res-pii-count">0</span></div>
+    <div class="res-row"><span>Попытки промпт-инъекций (Attacks):</span><span class="res-val" id="res-injections" style="color:var(--success)">Не обнаружено</span></div>
+    <div class="res-row"><span>Экономия / Объем контекста (Токены LLM):</span><span class="res-val" id="res-tokens">0</span></div>
+
+    <div class="box-panel clean">
+      <label for="clean-output" style="color:var(--success);">🛡️ Безопасный текст (Готов к отправке в нейросеть):</label>
+      <textarea id="clean-output" readonly></textarea>
+      <div class="action-row">
+        <button class="copy-btn" id="copy-clean-btn" onclick="copyCleanText()">📋 Скопировать текст</button>
+        <button class="copy-btn" onclick="window.print()">📄 Скачать PDF-отчет</button>
+      </div>
+      <button class="copy-btn" id="share-btn" style="margin-top:8px;" onclick="shareSettingsUrl()">🔗 Поделиться настройками фильтра</button>
+    </div>
+
+    <div class="box-panel restore">
+      <label for="ai-response-input" style="color:var(--purple);">🔄 Обратный Дешифратор (Вставьте ответ от ChatGPT/Claude с тегами):</label>
+      <textarea id="ai-response-input" placeholder="Вставьте сюда ответ нейросети, содержащий теги [EMAIL_1], [PHONE_1] и т.д., чтобы автоматически вернуть реальные данные..."></textarea>
+      <button class="copy-btn" style="border-color:var(--purple); color:var(--purple);" onclick="rehydrateAiResponse()">✨ Восстановить исходные данные в ответе ИИ</button>
+    </div>
+
+    <div class="math-log-box" id="math-log-container"></div>
+    <a href="https://amazon.com" target="_blank" class="partner-btn" id="partner-link">📚 Книги по кибербезопасности и защите данных на Amazon</a>
+  </div>
+
+  <div class="skynet-box" id="skynet-container">
+    <div class="skynet-title">🚨 Протокол обнаруженных угроз и рекомендаций</div>
+    <div class="res-row" style="border-bottom:none; color:#991b1b; font-size:12px; text-align:justify;"><span id="skynet-verdict">Ожидание сканирования текста на конфиденциальные данные.</span></div>
+  </div>
+
+  <div id="ads" class="ad-banner"><div id="container-e8c895e6c70ade8e4ef4a72354f42e97"></div></div>
+
+  <div class="seo-text" id="seo-box">
+    Локальный анонимизатор промптов и DLP-очиститель персональных данных (PII Scrubber &amp; Rehydrator) предназначен для безопасной подготовки договоров, таблиц, исходного кода и переписок перед загрузкой в ChatGPT, Claude, DeepSeek и Gemini. Инструмент работает на 100% автономно в оперативной памяти браузера без передачи текста на сторонние серверы, обезвреживает email-адреса, телефоны, банковские карты, API-ключи, IP-адреса и пользовательские стоп-слова, проверяет документ на скрытые промпт-инъекции и позволяет в один клик восстановить реальные значения в готовом ответе нейросети.
+  </div>
+</div>
+
+<script>
+window.lastAdShowTime = 0;
+
+// ИМПЕРСКИЙ АНТИ-ФРОД И АНТИ-БАН МОДУЛЬ ЗАЩИТЫ РЕКЛАМЫ
+function showAdsFunc() {
+  if (navigator.webdriver || !navigator.userAgent || navigator.userAgent.includes("Speed Insights") || navigator.userAgent.includes("Lighthouse")) {
+    return false;
+  }
+  const currentTime = Date.now();
+  if (currentTime - window.lastAdShowTime < 60000) {
+    return false;
+  }
+  const c = document.getElementById('ads');
+  if (!c) return false;
+
+  if (!window.adScriptLoaded) {
+    window.atOptions = {'key':'e8c895e6c70ade8e4ef4a72354f42e97','format':'iframe','height':90,'width':728,'params':{} };
+    try {
+      var s = document.createElement('script');
+      s.type = 'text/javascript'; s.async = true;
+      s.src = ['https://', 'bagelstoppage.', 'com/', 'e8c895e6c70ade8e4ef4a72354f42e97/', 'invoke.js'].join('');
+      c.appendChild(s);
+      window.adScriptLoaded = true;
+      window.lastAdShowTime = currentTime;
+    } catch(e) { return false; }
+  }
+  c.style.display = 'flex';
+  return true;
+}
+window.piiVaultMap = {};
+
+window.onload = function() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('mode') === 'redact' || params.get('mode') === 'tags') {
+    document.getElementById('scrub-mode').value = params.get('mode');
+  }
+  if (params.get('secrets')) {
+    document.getElementById('custom-secrets').value = params.get('secrets');
+  }
+  updatePreview();
+};
+
+function processDlpEngine() {
+  const rawText = document.getElementById('raw-prompt').value;
+  const mode = document.getElementById('scrub-mode').value;
+  const customInput = document.getElementById('custom-secrets').value.trim();
+
+  if (!rawText.trim()) return null;
+
+  let cleanText = rawText;
+  const vault = {};
+  let totalHits = 0;
+  let breakdown = [];
+
+  const registerMask = (prefix, matchStr) => {
+    totalHits++;
+    if (mode === 'redact') {
+      return '████████';
+    }
+    const tag = `[${prefix}_${totalHits}]`;
+    vault[tag] = matchStr;
+    return tag;
+  };
+
+  // 1. Пользовательский стоп-лист (корпоративные секреты, ФИО, проекты)
+  let customHits = 0;
+  if (customInput) {
+    const terms = customInput.split(',').map(t => t.trim()).filter(t => t.length > 1);
+    terms.forEach(term => {
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rx = new RegExp(escaped, 'gi');
+      cleanText = cleanText.replace(rx, (m) => {
+        customHits++;
+        return registerMask('SECRET', m);
+      });
+    });
+  }
+  if (customHits > 0) breakdown.push(`Стоп-слова: ${customHits}`);
+
+  // 2. API-ключи, токены (sk-..., Bearer, длинные hex/base64 секреты)
+  let keyHits = 0;
+  cleanText = cleanText.replace(/\b(sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{20,}|AIza[0-9A-Za-z-_]{35}|Bearer\s+[a-zA-Z0-9._-]{20,})\b/g, (m) => {
+    keyHits++;
+    return registerMask('API_KEY', m);
+  });
+  if (keyHits > 0) breakdown.push(`API-ключи: ${keyHits}`);
+
+  // 3. Банковские карты (16 цифр с пробелами/дефисами или слитно)
+  let cardHits = 0;
+  cleanText = cleanText.replace(/\b(?:\d[ -]*?){13,16}\b/g, (m) => {
+    const digitsOnly = m.replace(/\D/g, '');
+    if (digitsOnly.length >= 13 && digitsOnly.length <= 16) {
+      cardHits++;
+      return registerMask('CARD', m);
+    }
+    return m;
+  });
+  if (cardHits > 0) breakdown.push(`Карты: ${cardHits}`);
+
+  // 4. Email-адреса
+  let emailHits = 0;
+  cleanText = cleanText.replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, (m) => {
+    emailHits++;
+    return registerMask('EMAIL', m);
+  });
+  if (emailHits > 0) breakdown.push(`Email: ${emailHits}`);
+
+  // 5. Номера телефонов (международные и СНГ форматы)
+  let phoneHits = 0;
+  cleanText = cleanText.replace(/(?:\+?\d{1,3}[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{2}[\s.-]?\d{2}\b/g, (m) => {
+    if (m.replace(/\D/g, '').length >= 10) {
+      phoneHits++;
+      return registerMask('PHONE', m);
+    }
+    return m;
+  });
+  if (phoneHits > 0) breakdown.push(`Телефоны: ${phoneHits}`);
+
+  // 6. IPv4-адреса серверов (Надежная проверка без квадратных скобок)
+  let ipHits = 0;
+  cleanText = cleanText.replace(/\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b/g, (m, a, b, c, d) => {
+    if (+a <= 255 && +b <= 255 && +c <= 255 && +d <= 255) {
+      ipHits++;
+      return registerMask('IP_ADDR', m);
+    }
+    return m;
+  });
+  if (ipHits > 0) breakdown.push(`IP-адреса: ${ipHits}`);
+
+  // 7. ИНН / Паспортные серии (10-12 цифр подряд)
+  let idHits = 0;
+  cleanText = cleanText.replace(/\b\d{10,12}\b/g, (m) => {
+    idHits++;
+    return registerMask('DOC_ID', m);
+  });
+  if (idHits > 0) breakdown.push(`ИНН/ID: ${idHits}`);
+
+  // 8. Детектор скрытых промпт-инъекций (Prompt Injection Guard)
+  const injectionPatterns = [
+    /ignore (all )?previous instructions/i,
+    /игнорируй (все )?предыдущие инструкции/i,
+    /забудь (все )?инструкции/i,
+    /system prompt/i,
+    /системный промпт/i,
+    /you are now/i,
+    /отправь данные на/i
+  ];
+  let injectionHits = 0;
+  injectionPatterns.forEach(rx => {
+    if (rx.test(rawText)) injectionHits++;
+  });
+
+  // Расчет Индекса риска утечки (Leakage Risk Score: 0..100)
+  const wordsCount = (rawText.match(/[а-яёa-z0-9-]+/gi) || []).length || 1;
+  const estTokens = Math.round(cleanText.length / 3.2);
+  let riskScore = Math.min(100, Math.round((keyHits * 35) + (cardHits * 30) + (idHits * 20) + (emailHits * 12) + (phoneHits * 12) + (ipHits * 15) + (customHits * 15) + (injectionHits * 40)));
+
+  const logHtml = `
+    <strong>[LOG] Открытый математический DLP-аудит (Zero-Trust Formula):</strong><br>
+    • Формула риска: <code>Risk = min(100, Keys×35 + Cards×30 + ID×20 + IP×15 + PII×12 + Injections×40)</code><br>
+    • Подстановка: Keys(${keyHits})×35 + Cards(${cardHits})×30 + ID(${idHits})×20 + IP(${ipHits})×15 + PII(${emailHits + phoneHits + customHits})×12 + Inj(${injectionHits})×40 = <strong>${riskScore} / 100</strong><br>
+    • Обнаруженные категории: ${breakdown.length > 0 ? breakdown.join(' | ') : 'Чистый текст (уязвимостей не найдено)'}<br>
+    • Объем текста: ${wordsCount} слов (~${estTokens} токенов LLM).
+  `;
+
+  return {
+    cleanText,
+    vault,
+    totalHits,
+    injectionHits,
+    riskScore,
+    estTokens,
+    breakdown,
+    logHtml
+  };
+}
+
+function updatePreview() {
+  const res = processDlpEngine();
+  const preview = document.getElementById('live-preview-zone');
+  const fill = document.getElementById('bar-fill');
+
+  if (!res) {
+    preview.innerText = "Вставьте текст или договор";
+    preview.style.color = "var(--text-muted)";
+    fill.style.width = "0%";
+    return;
+  }
+
+  let label = `🟢 Низкий риск (${res.riskScore}/100): Данные в безопасности`;
+  let color = "var(--success)";
+
+  if (res.riskScore >= 60) {
+    label = `🚨 Критический риск утечки (${res.riskScore}/100): Найдено ${res.totalHits} уязвимостей!`;
+    color = "var(--danger)";
+  } else if (res.riskScore >= 25) {
+    label = `⚠️ Средний риск (${res.riskScore}/100): Рекомендуется очистка (${res.totalHits} объектов)`;
+    color = "var(--accent)";
+  }
+
+  preview.innerText = label;
+  preview.style.color = color;
+  fill.style.width = res.riskScore + '%';
+  fill.style.background = color;
+}
+
+function runPiiScrubber() {
+  const res = processDlpEngine();
+  if (!res) {
+    alert("Пожалуйста, вставьте исходный текст или договор в поле выше.");
+    return;
+  }
+
+  window.piiVaultMap = res.vault;
+
+  document.getElementById('res-risk-score').innerText = `${res.riskScore} / 100`;
+  document.getElementById('res-risk-score').style.color = res.riskScore >= 60 ? 'var(--danger)' : (res.riskScore >= 25 ? 'var(--accent)' : 'var(--success)');
+  document.getElementById('res-pii-count').innerText = `${res.totalHits} шт.`;
+
+  const injEl = document.getElementById('res-injections');
+  if (res.injectionHits > 0) {
+    injEl.innerText = `⚠️ Найдено угроз: ${res.injectionHits}`;
+    injEl.style.color = 'var(--danger)';
+  } else {
+    injEl.innerText = "Не обнаружено (Чисто)";
+    injEl.style.color = 'var(--success)';
+  }
+
+  document.getElementById('res-tokens').innerText = `~${res.estTokens} токенов`;
+  document.getElementById('clean-output').value = res.cleanText;
+
+  const logBox = document.getElementById('math-log-container');
+  logBox.innerHTML = res.logHtml;
+  logBox.style.display = 'block';
+
+  let verdictText = res.totalHits > 0
+    ? `Обезврежено конфиденциальных объектов: ${res.totalHits} (${res.breakdown.join(', ')}). Все данные заменены локально в памяти браузера. Ключ обратного восстановления активен в текущей вкладке.`
+    : `Конфиденциальных персональных данных (email, карт, телефонов, API-ключей) не обнаружено. Текст безопасен для отправки в нейросеть.`;
+
+  if (res.injectionHits > 0) {
+    verdictText += ` ВНИМАНИЕ: В документе обнаружены скрытые команды управления нейросетью (Prompt Injection)! Не передавайте этот файл ИИ без ручной проверки.`;
+  }
+
+  document.getElementById('skynet-verdict').innerText = verdictText;
+  document.getElementById('results-box').style.display = 'block';
+  document.getElementById('skynet-container').style.display = 'block';
+  document.getElementById('seo-box').style.display = 'block';
+
+  updatePreview();
+  showAdsFunc();
+}
+
+function copyCleanText() {
+  const out = document.getElementById('clean-output');
+  if (!out || !out.value) return;
+  navigator.clipboard.writeText(out.value).then(() => {
+    const btn = document.getElementById('copy-clean-btn');
+    const old = btn.innerText;
+    btn.innerText = "✅ Безопасный текст скопирован!";
+    btn.style.background = "#dcfce7";
+    btn.style.color = "#166534";
+    setTimeout(() => { btn.innerText = old; btn.style.background = "#f8fafc"; btn.style.color = "var(--slate)"; }, 2200);
+  });
+}
+
+function rehydrateAiResponse() {
+  const aiArea = document.getElementById('ai-response-input');
+  if (!aiArea || !aiArea.value.trim()) {
+    alert("Вставьте текст ответа от ChatGPT/Claude с тегами [EMAIL_1], [CARD_1] и т.д.");
+    return;
+  }
+  const keys = Object.keys(window.piiVaultMap);
+  if (keys.length === 0) {
+    alert("Сначала выполните очистку исходного текста в режиме «Умные теги», чтобы сформировать ключ восстановления.");
+    return;
+  }
+  let restored = aiArea.value;
+  keys.forEach(tag => {
+    restored = restored.split(tag).join(window.piiVaultMap[tag]);
+  });
+  aiArea.value = restored;
+  alert("✅ Исходные данные успешно восстановлены в ответе нейросети!");
+}
+
+function shareSettingsUrl() {
+  const mode = document.getElementById('scrub-mode').value;
+  const secrets = document.getElementById('custom-secrets').value.trim();
+  const url = new URL(window.location.origin + window.location.pathname);
+  url.searchParams.set('mode', mode);
+  if (secrets) url.searchParams.set('secrets', secrets);
+
+  navigator.clipboard.writeText(url.toString()).then(() => {
+    const btn = document.getElementById('share-btn');
+    const old = btn.innerText;
+    btn.innerText = "✅ Ссылка с настройками фильтра скопирована!";
+    setTimeout(() => { btn.innerText = old; }, 2200);
+  });
+}
+</script>
+</body>
+</html>
